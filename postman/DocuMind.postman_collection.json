@@ -1,0 +1,556 @@
+{
+  "info": {
+    "_postman_id": "d0c0a1f2-3c4b-4c66-9c1a-9f0d0c0d0001",
+    "name": "DocuMind API",
+    "description": "Upload documents, query them with RAG retrieval, and read cited answers. Run 'Auth > Login (demo)' first: it stores the JWT in the {{token}} collection variable.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "token", "value": "" },
+    { "key": "adminToken", "value": "" },
+    { "key": "docId", "value": "" },
+    { "key": "sessionId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/health", "host": ["{{baseUrl}}"], "path": ["api", "health"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('service is documind', () => pm.expect(body.service).to.eql('documind-backend'));",
+                  "pm.test('reports an answer mode', () => pm.expect(body.aiModel).to.be.a('string').and.not.empty);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login (demo)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"demo@documind.dev\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('returns a JWT', () => pm.expect(body.token).to.be.a('string').and.not.empty);",
+                  "pm.collectionVariables.set('token', body.token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login (admin)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@documind.dev\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('role is ADMIN', () => pm.expect(body.role).to.eql('ADMIN'));",
+                  "pm.collectionVariables.set('adminToken', body.token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Register (new user)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Tester\",\n  \"email\": \"postman.tester@documind.dev\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "auth", "register"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('token returned', () => pm.expect(body.token).to.be.a('string').and.not.empty);",
+                  "pm.collectionVariables.set('token', body.token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Current user",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/auth/me", "host": ["{{baseUrl}}"], "path": ["api", "auth", "me"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('has an email', () => pm.expect(pm.response.json().email).to.include('@'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Documents",
+      "item": [
+        {
+          "name": "List documents",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/documents?page=0&size=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "documents"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('page shape', () => {",
+                  "  pm.expect(body).to.have.keys('content','page','size','totalElements','totalPages','last');",
+                  "});",
+                  "if (body.content.length > 0) pm.collectionVariables.set('docId', body.content[0].id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Upload file (pick a PDF/TXT/MD)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [{ "key": "file", "type": "file", "src": [] }]
+            },
+            "url": { "raw": "{{baseUrl}}/api/documents", "host": ["{{baseUrl}}"], "path": ["api", "documents"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('indexed into passages', () => pm.expect(body.chunkCount).to.be.above(0));",
+                  "pm.collectionVariables.set('docId', body.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create from pasted text",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman demo note\",\n  \"content\": \"The Orion migration starts on 4 August 2027. The project owner is Meera Shah and the budget is 120000 dollars.\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/documents/text", "host": ["{{baseUrl}}"], "path": ["api", "documents", "text"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('has a page', () => pm.expect(body.pageCount).to.be.at.least(1));",
+                  "pm.collectionVariables.set('docId', body.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get one document",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/documents/{{docId}}", "host": ["{{baseUrl}}"], "path": ["api", "documents", "{{docId}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('has a name', () => pm.expect(pm.response.json().name).to.be.a('string').and.not.empty);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List passages",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/documents/{{docId}}/chunks?page=0&size=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "documents", "{{docId}}", "chunks"],
+              "query": [
+                { "key": "page", "value": "0" },
+                { "key": "size", "value": "20" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('passages carry page numbers', () => {",
+                  "  pm.expect(body.totalElements).to.be.above(0);",
+                  "  pm.expect(body.content[0].pageNumber).to.be.at.least(1);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete document",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/documents/{{docId}}", "host": ["{{baseUrl}}"], "path": ["api", "documents", "{{docId}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Chat",
+      "item": [
+        {
+          "name": "Ask a question",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"How many paid leave days do full-time employees get?\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/chat/ask", "host": ["{{baseUrl}}"], "path": ["api", "chat", "ask"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('answer is not empty', () => pm.expect(body.answer.content).to.be.a('string').and.not.empty);",
+                  "pm.test('answer cites at least one source', () => pm.expect(body.answer.citations.length).to.be.above(0));",
+                  "pm.test('citation has a page', () => pm.expect(body.answer.citations[0].pageNumber).to.be.at.least(1));",
+                  "pm.test('mode is AI or OFFLINE', () => pm.expect(['AI','OFFLINE']).to.include(body.answer.mode));",
+                  "pm.collectionVariables.set('sessionId', body.sessionId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ask a follow-up in the same conversation",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"What is the notice period for managers?\",\n  \"sessionId\": {{sessionId}}\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/chat/ask", "host": ["{{baseUrl}}"], "path": ["api", "chat", "ask"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('same conversation reused', () => pm.expect(body.sessionId).to.eql(Number(pm.collectionVariables.get('sessionId'))));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List conversations",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/chat/sessions?page=0&size=20", "host": ["{{baseUrl}}"], "path": ["api", "chat", "sessions"], "query": [{ "key": "page", "value": "0" }, { "key": "size", "value": "20" }] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('conversations returned', () => pm.expect(pm.response.json().totalElements).to.be.at.least(1));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get conversation",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/chat/sessions/{{sessionId}}", "host": ["{{baseUrl}}"], "path": ["api", "chat", "sessions", "{{sessionId}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('has both roles', () => {",
+                  "  const roles = body.messages.map(m => m.role);",
+                  "  pm.expect(roles).to.include('USER');",
+                  "  pm.expect(roles).to.include('ASSISTANT');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete conversation",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/chat/sessions/{{sessionId}}", "host": ["{{baseUrl}}"], "path": ["api", "chat", "sessions", "{{sessionId}}"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": ["pm.test('204 No Content', () => pm.response.to.have.status(204));"]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Stats",
+      "item": [
+        {
+          "name": "My stats",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/stats/me", "host": ["{{baseUrl}}"], "path": ["api", "stats", "me"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('has counters', () => pm.expect(pm.response.json()).to.have.keys('documents','chunks','sessions','questions','aiAnswers','offlineAnswers','avgLatencyMs'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin stats",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/admin/stats", "host": ["{{baseUrl}}"], "path": ["api", "admin", "stats"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('counts users', () => pm.expect(pm.response.json().users).to.be.at.least(3));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin users",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/admin/users", "host": ["{{baseUrl}}"], "path": ["api", "admin", "users"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('is a list', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Errors and permissions",
+      "item": [
+        {
+          "name": "No token -> 401",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/api/documents", "host": ["{{baseUrl}}"], "path": ["api", "documents"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('401 Unauthorized', () => pm.response.to.have.status(401));"] } }
+          ]
+        },
+        {
+          "name": "Wrong password -> 401",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"demo@documind.dev\",\n  \"password\": \"wrong\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('401 Unauthorized', () => pm.response.to.have.status(401));"] } }
+          ]
+        },
+        {
+          "name": "User hits admin endpoint -> 403",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/admin/stats", "host": ["{{baseUrl}}"], "path": ["api", "admin", "stats"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('403 Forbidden', () => pm.response.to.have.status(403));"] } }
+          ]
+        },
+        {
+          "name": "Unknown document -> 404",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/documents/999999", "host": ["{{baseUrl}}"], "path": ["api", "documents", "999999"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('404 Not Found', () => pm.response.to.have.status(404));"] } }
+          ]
+        },
+        {
+          "name": "Bad id type -> 400",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/documents/abc/chunks", "host": ["{{baseUrl}}"], "path": ["api", "documents", "abc", "chunks"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('400 Bad Request', () => pm.response.to.have.status(400));"] } }
+          ]
+        },
+        {
+          "name": "Validation error -> 400",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"question\": \"\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/chat/ask", "host": ["{{baseUrl}}"], "path": ["api", "chat", "ask"] }
+          },
+          "event": [
+            { "listen": "test", "script": { "exec": ["pm.test('400 Bad Request', () => pm.response.to.have.status(400));"] } }
+          ]
+        }
+      ]
+    }
+  ]
+}
