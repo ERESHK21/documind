@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: documind-api
+    runtime: docker
+    plan: free
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: APP_CORS_ALLOWED_ORIGINS
+        value: https://documind-tawny.vercel.app,http://localhost:5173,http://localhost:5174
+      - key: JAVA_OPTS
+        value: -XX:MaxRAMPercentage=70
+      - key: GEMINI_API_KEY
+        sync: false
