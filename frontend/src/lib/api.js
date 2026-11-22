@@ -1,6 +1,10 @@
 import axios from 'axios';
 
-export const api = axios.create({ baseURL: '/api' });
+// In development this is empty, so requests go to /api and Vite proxies them to
+// localhost:8080. In a deployed build set VITE_API_URL to the backend's origin.
+export const API_ORIGIN = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
+
+export const api = axios.create({ baseURL: `${API_ORIGIN}/api` });
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('documind_token');
